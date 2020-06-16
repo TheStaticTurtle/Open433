@@ -5,6 +5,7 @@ import struct
 
 logger = logging.getLogger(__name__)
 
+
 def zero_cut(raw):
 	if type(raw) != str:
 		raw = raw.decode("utf-8")
@@ -204,12 +205,36 @@ class RCSwitch(object):
 		self._timeout = timeout
 
 	def setRepeatTransmit(self, repeat):
+		if self.signal_repeat == repeat:
+			#No need it's the same
+			return
 		self.signal_repeat = max(repeat, 1)
 		self.send(packets.SendConfig(self.signal_repeat, self.receive_tolerance))
+		if self._shouldWaitForAck:
+			while True:
+				p = self.receive_packet(timeout=self._timeout)
+				if p is None:
+					return False
+				if isinstance(p, packets.ReceivedAck):
+					return True
+		else:
+			return True
 
 	def setReceiveTolerance(self, tol):
+		if self.receive_tolerance == tol:
+			#No need it's the same
+			return
 		self.receive_tolerance = min(max(tol, 0), 100)
 		self.send(packets.SendConfig(self.signal_repeat, self.receive_tolerance))
+		if self._shouldWaitForAck:
+			while True:
+				p = self.receive_packet(timeout=self._timeout)
+				if p is None:
+					return False
+				if isinstance(p, packets.ReceivedAck):
+					return True
+		else:
+			return True
 
 	def send(self, packet):
 		if type(packet) in packets().SendTypes:
@@ -222,10 +247,13 @@ class RCSwitch(object):
 					p = self.receive_packet(timeout=self._timeout)
 					if p is None:
 						return False
-					if isinstance(p,packets.ReceivedAck):
+					if isinstance(p, packets.ReceivedAck):
 						return True
 			else:
 				return True
 		else:
 			logger.error("Passed packet can't be sent " + str(type(packet)))
 			raise ValueError("Passed packet can't be sent " + str(type(packet)))
+
+	def cleanup(self):
+		self.serial.close()
