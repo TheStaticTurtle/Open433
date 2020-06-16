@@ -1,24 +1,28 @@
-import open433
+# import open433
 import logging
 import time
 
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)8s] %(name)10s - %(message)s')
 
-rf = open433.boardv1("COM31")
-rf.connect()
-rf.setMode(open433.boardv1._MODE_ILDE)
-rf.setRetryCount(4) # Normally 10 at more that 30 module don't respond in time
+import rcswitch
 
-# for packet in rf.monitor(advanced=False):
-# 	print packet
+mySwitch = rcswitch.RCSwitch("COM3")
+time.sleep(2)
 
-packet_on  = open433.SimplePacket(value=2473463296,bitlenght=32,protocol=2)
-packet_off = open433.SimplePacket(value=2741898752,bitlenght=32,protocol=2)
+# for packet in mySwitch.listen():
+# 	print(packet)
 
-t=0.5
-rf.setMode(open433.boardv1._MODE_TRANSMITTER)
+packet_on  = rcswitch.packets.SendDecimal(value=2523794944, length=32, protocol=2, delay=700)
+packet_off = rcswitch.packets.SendDecimal(value=2658012672, length=32, protocol=2, delay=700)
+
+mySwitch.setRepeatTransmit(5)
+
+t=1
 while True:
-	rf.send(packet_on)
+	mySwitch.send(packet_on)
+	mySwitch.receive_packet(timeout=0.1) #Would be great to receive an ACK
 	time.sleep(t)
-	rf.send(packet_off)
+
+	mySwitch.send(packet_off)
+	mySwitch.receive_packet(timeout=0.1) #Would be great to receive an ACK
 	time.sleep(t)
