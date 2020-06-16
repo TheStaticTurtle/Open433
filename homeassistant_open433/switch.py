@@ -9,12 +9,12 @@ from homeassistant.const import CONF_NAME, CONF_SWITCHES, EVENT_HOMEASSISTANT_ST
 import homeassistant.helpers.config_validation as cv
 from . import rcswitch
 
-
 _LOGGER = logging.getLogger(__name__)
+
+CONF_COMPORT = "port"
 
 CONF_CODE_OFF = "code_off"
 CONF_CODE_ON = "code_on"
-CONF_COMPORT = "port"
 CONF_PROTOCOL = "protocol"
 CONF_LENGTH = "length"
 CONF_SIGNAL_REPETITIONS = "signal_repetitions"
@@ -39,7 +39,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
 
 def setup_platform(hass, config, add_entities, discovery_info=None):
 	comport = config.get(CONF_COMPORT)
-	mySwitch = rcswitch.RCSwitch(comport)
+	mySwitch = rcswitch.RCSwitch(comport,logger=_LOGGER)
 	mySwitch.libWaitForAck(True, timeout=0.25)
 
 	mySwitch_lock = RLock()

@@ -3,7 +3,8 @@ import serial
 import logging
 import struct
 
-logger = logging.getLogger(__name__)
+root_logger = logging.getLogger(__name__)
+
 
 def zero_cut(raw):
 	if type(raw) != str:
@@ -13,6 +14,13 @@ def zero_cut(raw):
 	except ValueError:
 		return raw
 
+def getPacketType(raw):
+	if raw == "timeout":
+		return raw
+	fmt = "16s"
+	size = struct.calcsize(fmt)
+	data = struct.unpack(fmt, raw[:size])
+	return zero_cut(data[0].decode("utf-8"))
 
 class packets(object):
 	def __init__(self):
@@ -118,11 +126,14 @@ class packets(object):
 			return packed
 
 
+
+
 class RCSwitch(object):
 	"""docstring for RCSwitch"""
 
-	def __init__(self, port):
+	def __init__(self, port, logger=root_logger):
 		super(RCSwitch, self).__init__()
+		self.logger = logger
 		self.signal_repeat = 3
 		self.receive_tolerance = 60
 		self.com_port = port
@@ -135,49 +146,41 @@ class RCSwitch(object):
 		buf = bytes()
 		while buf[-len(sync_word):] != bytes(sync_word.encode("ascii")):
 			buf += bytes(self.serial.read())
-			if (timeout != -1 and (tstart + timeout < time.time())):
-				if (should_print_timeout_error):
-					logger.error("Timeout while reading start sync")
+			if timeout != -1 and (tstart + timeout < time.time()):
+				if should_print_timeout_error:
+					self.logger.error("Timeout while reading start sync")
 				return "timeout"
 		self.serial.read(2)
 
 	def serial_sync_end(self, sync_word, timeout: float = -1, should_print_timeout_error=True):
-		tstart = time.time()
+		time_start = time.time()
 		buf = bytes()
 		while buf[-len(sync_word):] != bytes(sync_word.encode("ascii")):
 			buf += bytes(self.serial.read())
-			if (timeout != -1 and (tstart + timeout < time.time())):
-				if (should_print_timeout_error):
-					logger.error("Timeout while reading end sync")
+			if timeout != -1 and (time_start + timeout < time.time()):
+				if should_print_timeout_error:
+					self.logger.error("Timeout while reading end sync")
 				return "timeout"
 		return buf[:-len(sync_word)]
 
-	def getPacketType(self, raw):
-		if raw == "timeout":
-			return raw
-		fmt = "16s"
-		size = struct.calcsize(fmt)
-		data = struct.unpack(fmt, raw[:size])
-		return zero_cut(data[0].decode("utf-8"))
-
 	def receive_packet(self, timeout: float = -1):
-		tstart = time.time()
-		while (timeout == -1) or (tstart + timeout > time.time()):
+		time_start = time.time()
+		while (timeout == -1) or (time_start + timeout > time.time()):
 			self.serial_sync("START", timeout=timeout, should_print_timeout_error=False)
 			raw = self.serial_sync_end("END", timeout=timeout, should_print_timeout_error=False)
-			packet_type = self.getPacketType(raw)
+			packet_type = getPacketType(raw)
 			if packet_type == "receive_signal":
-				logger.info("Received packet " + str(packet_type))
+				self.logger.info("Received packet " + str(packet_type))
 				return packets.ReceivedSignal().parse(raw)
 			if packet_type == "ack":
-				logging.info("Received ACK message")
+				self.logger.info("Received ACK message")
 				return packets.ReceivedAck().parse(raw)
 		return None
 
 	def listen(self, timeout=-1):
 		return self._listen(self, timeout=timeout)
 
-	class _listen():
+	class _listen:
 		def __init__(self, parent, timeout=-1):
 			self.parent = parent
 			self.timeout = timeout
@@ -190,13 +193,13 @@ class RCSwitch(object):
 			return self.__next__()
 
 		def __next__(self):
-			tstart = time.time()
+			time_start = time.time()
 			while True:
-				if self.closed or (self.timeout != -1 and (tstart + self.timeout < time.time())):
+				if self.closed or (self.timeout != -1 and (time_start + self.timeout < time.time())):
 					raise StopIteration
 
 				data = self.parent.receive_packet(timeout=0.5 if self.timeout == -1 else self.timeout)
-				if data != None:
+				if data is None:
 					return data
 
 	def libWaitForAck(self, shouldwait, timeout=0.1):
@@ -204,12 +207,36 @@ class RCSwitch(object):
 		self._timeout = timeout
 
 	def setRepeatTransmit(self, repeat):
+		if self.signal_repeat == repeat:
+			# No need it's the same
+			return
 		self.signal_repeat = max(repeat, 1)
 		self.send(packets.SendConfig(self.signal_repeat, self.receive_tolerance))
+		if self._shouldWaitForAck:
+			while True:
+				p = self.receive_packet(timeout=self._timeout)
+				if p is None:
+					return False
+				if isinstance(p, packets.ReceivedAck):
+					return True
+		else:
+			return True
 
 	def setReceiveTolerance(self, tol):
+		if self.receive_tolerance == tol:
+			# No need it's the same
+			return
 		self.receive_tolerance = min(max(tol, 0), 100)
 		self.send(packets.SendConfig(self.signal_repeat, self.receive_tolerance))
+		if self._shouldWaitForAck:
+			while True:
+				p = self.receive_packet(timeout=self._timeout)
+				if p is None:
+					return False
+				if isinstance(p, packets.ReceivedAck):
+					return True
+		else:
+			return True
 
 	def send(self, packet):
 		if type(packet) in packets().SendTypes:
@@ -222,10 +249,13 @@ class RCSwitch(object):
 					p = self.receive_packet(timeout=self._timeout)
 					if p is None:
 						return False
-					if isinstance(p,packets.ReceivedAck):
+					if isinstance(p, packets.ReceivedAck):
 						return True
 			else:
 				return True
 		else:
-			logger.error("Passed packet can't be sent " + str(type(packet)))
+			self.logger.error("Passed packet can't be sent " + str(type(packet)))
 			raise ValueError("Passed packet can't be sent " + str(type(packet)))
+
+	def cleanup(self):
+		self.serial.close()
