@@ -21,6 +21,7 @@ Then after restarting the server you need to set the configure homeassistant to 
 ```
 open433:
   port: COM3
+  speed: 9600 #(Optional default to 9600)
 ```
 Then you can add switches like this:
 ```
@@ -30,9 +31,10 @@ switch:
       KitchenLamp:
         code_on: 2523794944
         code_off: 2658012672
-        protocol: 2
-        length: 32
-        signal_repetitions: 5
+        protocol: 2 #(Optional default to 2)
+        length: 32 #(Optional default to 32)
+        signal_repetitions: 5 #(Optional default to 15)
+        enable_receive: true #(Optional default to false) enable listening to incoming rf message of the switch codes
 ```
 Or add binary sensors (with a possible timeout) like this:
 ```
@@ -42,7 +44,7 @@ binary_sensor:
       inputA:
         code_on: 2389577216
         code_off: 2171473408
-        protocol: 2
-        length: 32
-        on_timeout: 2 #(Optional) Will turn off 2sec after receiving code_on, code_off will still be functional
+        protocol: 2 #(Optional default to 2)
+        length: 32 #(Optional default to 32)
+        on_timeout: 2 #(Optional 0 to turn off) Will turn off 2sec after receiving code_on, code_off will still be functional
 ```

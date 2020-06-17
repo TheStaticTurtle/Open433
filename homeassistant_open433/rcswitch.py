@@ -133,18 +133,19 @@ class packets(object):
 class RCSwitch(object):
 	"""docstring for RCSwitch"""
 
-	def __init__(self, port, logger=root_logger):
+	def __init__(self, port, speed=9600, logger=root_logger):
 		super(RCSwitch, self).__init__()
 		self.logger = logger
 		self.signal_repeat = 3
 		self.receive_tolerance = 60
 		self.com_port = port
+		self.com_speed = speed
 		self._shouldWaitForAck = False
 		self._timeout = 0.1
 		self._incomingPacketListeners = []
 		self._bufferedPackets = []
 		self.polling_thread = None
-		self.serial = serial.Serial(self.com_port, 9600, timeout=0.1, xonxoff=False, rtscts=False)
+		self.serial = serial.Serial(self.com_port, self.com_speed, timeout=0.1, xonxoff=False, rtscts=False)
 
 	def serial_sync(self, sync_word, timeout: float = -1, should_print_timeout_error=True):
 		tstart = time.time()
@@ -156,6 +157,7 @@ class RCSwitch(object):
 					self.logger.error("Timeout while reading start sync")
 				return "timeout"
 		self.serial.read(2)
+
 	def serial_sync_end(self, sync_word, timeout: float = -1, should_print_timeout_error=True):
 		time_start = time.time()
 		buf = bytes()
@@ -174,9 +176,9 @@ class RCSwitch(object):
 			raw = self.serial_sync_end("END", timeout=timeout, should_print_timeout_error=False)
 			packet_type = getPacketType(raw)
 			if packet_type == "receive_signal":
-				self.logger.info("Received packet " + str(packet_type))
 				p = packets.ReceivedSignal().parse(raw)
-				self.logger.debug(p)
+				self.logger.info("Received packet: " + str(p))
+				return p
 			if packet_type == "ack":
 				self.logger.info("Received ACK message")
 				return packets.ReceivedAck().parse(raw)
@@ -184,6 +186,7 @@ class RCSwitch(object):
 
 	def listen(self, timeout=-1):
 		return self._listen(self, timeout=timeout)
+
 	class _listen:
 		def __init__(self, parent, timeout=-1):
 			self.parent = parent
@@ -218,12 +221,7 @@ class RCSwitch(object):
 		self.send(packets.SendConfig(self.signal_repeat, self.receive_tolerance))
 		if self._shouldWaitForAck:
 			while not self.ackReceived:
-				p = self.receive_packet(timeout=self._timeout)
-				if p is None:
-					return False
-				else:
-					self._bufferedPackets.append(p)
-					self._dispatchPacketsToListeners()
+				time.sleep(.1)
 		else:
 			return True
 
@@ -235,12 +233,7 @@ class RCSwitch(object):
 		self.send(packets.SendConfig(self.signal_repeat, self.receive_tolerance))
 		if self._shouldWaitForAck:
 			while not self.ackReceived:
-				p = self.receive_packet(timeout=self._timeout)
-				if p is None:
-					return False
-				else:
-					self._bufferedPackets.append(p)
-					self._dispatchPacketsToListeners()
+				time.sleep(.1)
 		else:
 			return True
 
@@ -252,12 +245,7 @@ class RCSwitch(object):
 			self.logger.info("Sending packet: " + str(packet))
 			if self._shouldWaitForAck:
 				while not self.ackReceived:
-					p = self.receive_packet(timeout=self._timeout)
-					if p is None:
-						return False
-					else:
-						self._bufferedPackets.append(p)
-						self._dispatchPacketsToListeners()
+					time.sleep(.1)
 			else:
 				return True
 		else:

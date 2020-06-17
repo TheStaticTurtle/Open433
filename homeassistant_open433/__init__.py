@@ -10,11 +10,14 @@ _LOGGER = logging.getLogger(__name__)
 DOMAIN = "open433"
 
 CONF_COMPORT = "port"
+CONF_COMSPEED = "speed"
+
 REQ_LOCK = threading.Lock()
 CONFIG_SCHEMA = vol.Schema(
 	{
 		DOMAIN: vol.Schema({
 			vol.Required(CONF_COMPORT): cv.string,
+			vol.Optional(CONF_COMSPEED, default=9600): cv.positive_int,
 		})
 	},
 	extra=vol.ALLOW_EXTRA,
@@ -25,8 +28,9 @@ CONFIG_SCHEMA = vol.Schema(
 def setup(hass, config):
 	conf = config[DOMAIN]
 	comport = conf.get(CONF_COMPORT)
+	comspeed = conf.get(CONF_COMSPEED)
 
-	rf = rcswitch.RCSwitch(comport)
+	rf = rcswitch.RCSwitch(comport, speed=comspeed)
 
 	def cleanup(event):
 		rf.cleanup()

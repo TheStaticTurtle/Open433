@@ -14,6 +14,7 @@ CONF_CODE_ON = "code_on"
 CONF_PROTOCOL = "protocol"
 CONF_LENGTH = "length"
 CONF_SIGNAL_REPETITIONS = "signal_repetitions"
+CONF_ENABLE_RECEIVE = "enable_receive"
 
 SWITCH_SCHEMA = vol.Schema(
 	{
@@ -22,6 +23,7 @@ SWITCH_SCHEMA = vol.Schema(
 		vol.Optional(CONF_LENGTH, default=32): cv.positive_int,
 		vol.Optional(CONF_SIGNAL_REPETITIONS, default=15): cv.positive_int,
 		vol.Optional(CONF_PROTOCOL, default=2): cv.positive_int,
+		vol.Optional(CONF_ENABLE_RECEIVE, default=False): cv.boolean,
 	}
 )
 
@@ -47,6 +49,7 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
 				properties.get(CONF_SIGNAL_REPETITIONS),
 				properties.get(CONF_CODE_ON),
 				properties.get(CONF_CODE_OFF),
+				properties.get(CONF_ENABLE_RECEIVE),
 			)
 		)
 
@@ -54,7 +57,7 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
 
 
 class Open433Switch(SwitchEntity):
-	def __init__(self, name, rf, protocol, length, signal_repetitions, code_on, code_off):
+	def __init__(self, name, rf, protocol, length, signal_repetitions, code_on, code_off,enable_rx):
 		self._name = name
 		self._state = False
 		self._rf = rf
@@ -63,7 +66,8 @@ class Open433Switch(SwitchEntity):
 		self._code_on = code_on
 		self._code_off = code_off
 		self._signal_repetitions = signal_repetitions
-		self._rf.addIncomingPacketListener(self._incoming)
+		if enable_rx:
+			self._rf.addIncomingPacketListener(self._incoming)
 
 	def _incoming(self, packet):
 		if isinstance(packet, rcswitch.packets.ReceivedSignal):
