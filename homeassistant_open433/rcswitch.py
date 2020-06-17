@@ -1,4 +1,6 @@
 import time
+from threading import Thread
+
 import serial
 import logging
 import struct
@@ -14,6 +16,7 @@ def zero_cut(raw):
 	except ValueError:
 		return raw
 
+
 def getPacketType(raw):
 	if raw == "timeout":
 		return raw
@@ -21,6 +24,7 @@ def getPacketType(raw):
 	size = struct.calcsize(fmt)
 	data = struct.unpack(fmt, raw[:size])
 	return zero_cut(data[0].decode("utf-8"))
+
 
 class packets(object):
 	def __init__(self):
@@ -126,8 +130,6 @@ class packets(object):
 			return packed
 
 
-
-
 class RCSwitch(object):
 	"""docstring for RCSwitch"""
 
@@ -139,6 +141,9 @@ class RCSwitch(object):
 		self.com_port = port
 		self._shouldWaitForAck = False
 		self._timeout = 0.1
+		self._incomingPacketListeners = []
+		self._bufferedPackets = []
+		self.polling_thread = None
 		self.serial = serial.Serial(self.com_port, 9600, timeout=0.1, xonxoff=False, rtscts=False)
 
 	def serial_sync(self, sync_word, timeout: float = -1, should_print_timeout_error=True):
@@ -151,7 +156,6 @@ class RCSwitch(object):
 					self.logger.error("Timeout while reading start sync")
 				return "timeout"
 		self.serial.read(2)
-
 	def serial_sync_end(self, sync_word, timeout: float = -1, should_print_timeout_error=True):
 		time_start = time.time()
 		buf = bytes()
@@ -171,7 +175,8 @@ class RCSwitch(object):
 			packet_type = getPacketType(raw)
 			if packet_type == "receive_signal":
 				self.logger.info("Received packet " + str(packet_type))
-				return packets.ReceivedSignal().parse(raw)
+				p = packets.ReceivedSignal().parse(raw)
+				self.logger.debug(p)
 			if packet_type == "ack":
 				self.logger.info("Received ACK message")
 				return packets.ReceivedAck().parse(raw)
@@ -179,7 +184,6 @@ class RCSwitch(object):
 
 	def listen(self, timeout=-1):
 		return self._listen(self, timeout=timeout)
-
 	class _listen:
 		def __init__(self, parent, timeout=-1):
 			self.parent = parent
@@ -199,7 +203,7 @@ class RCSwitch(object):
 					raise StopIteration
 
 				data = self.parent.receive_packet(timeout=0.5 if self.timeout == -1 else self.timeout)
-				if data is None:
+				if data is not None:
 					return data
 
 	def libWaitForAck(self, shouldwait, timeout=0.1):
@@ -213,12 +217,13 @@ class RCSwitch(object):
 		self.signal_repeat = max(repeat, 1)
 		self.send(packets.SendConfig(self.signal_repeat, self.receive_tolerance))
 		if self._shouldWaitForAck:
-			while True:
+			while not self.ackReceived:
 				p = self.receive_packet(timeout=self._timeout)
 				if p is None:
 					return False
-				if isinstance(p, packets.ReceivedAck):
-					return True
+				else:
+					self._bufferedPackets.append(p)
+					self._dispatchPacketsToListeners()
 		else:
 			return True
 
@@ -229,12 +234,13 @@ class RCSwitch(object):
 		self.receive_tolerance = min(max(tol, 0), 100)
 		self.send(packets.SendConfig(self.signal_repeat, self.receive_tolerance))
 		if self._shouldWaitForAck:
-			while True:
+			while not self.ackReceived:
 				p = self.receive_packet(timeout=self._timeout)
 				if p is None:
 					return False
-				if isinstance(p, packets.ReceivedAck):
-					return True
+				else:
+					self._bufferedPackets.append(p)
+					self._dispatchPacketsToListeners()
 		else:
 			return True
 
@@ -243,19 +249,56 @@ class RCSwitch(object):
 			self.serial.write(b"START\r\n")
 			self.serial.write(packet.pack())
 			self.serial.write(b"END\r\n")
-			logging.info("Sending packet: " + str(packet))
+			self.logger.info("Sending packet: " + str(packet))
 			if self._shouldWaitForAck:
-				while True:
+				while not self.ackReceived:
 					p = self.receive_packet(timeout=self._timeout)
 					if p is None:
 						return False
-					if isinstance(p, packets.ReceivedAck):
-						return True
+					else:
+						self._bufferedPackets.append(p)
+						self._dispatchPacketsToListeners()
 			else:
 				return True
 		else:
 			self.logger.error("Passed packet can't be sent " + str(type(packet)))
 			raise ValueError("Passed packet can't be sent " + str(type(packet)))
 
+	def _packetReceiver(self):
+		iterator = self._listen(self, timeout=-1)
+		for packet in iterator:
+			if packet is not None:
+				self._bufferedPackets.append(packet)
+				self._dispatchPacketsToListeners()
+
+	def _ackPacketReceiver(self, p):
+		if isinstance(p, packets.ReceivedAck):
+			self.ackReceived = True
+
+	def startReceivingThread(self):
+		if self.polling_thread is None:
+			self.polling_thread = Thread(target=self._packetReceiver)
+			self.polling_thread.start()
+
+	def _dispatchPacketsToListeners(self):
+		if len(self._incomingPacketListeners) > 0:
+			while len(self._bufferedPackets) > 0:
+				packet = self._bufferedPackets.pop()
+				for listener in self._incomingPacketListeners:
+					listener(packet)
+
+	def addIncomingPacketListener(self, who):
+		self._incomingPacketListeners.append(who)
+
+	def removeIncomingPacketListener(self, who):
+		if who in self._incomingPacketListeners:
+			self._incomingPacketListeners.remove(who)
+
 	def cleanup(self):
 		self.serial.close()
+		if self.polling_thread is not None:
+			self.polling_thread.join()
+
+	def prepare(self):
+		self.addIncomingPacketListener(self._ackPacketReceiver)
+		pass

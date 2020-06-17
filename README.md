@@ -17,11 +17,15 @@ If you don't use homeassistant you can see an example in the software folder.
 
 ## From homeassistant
 If you want to use the board with homeassistant you need to create a `custom_components` folder in the homeassistant configuration directory (same one as the configuration.yaml) then you need to rename the `homeassistant_open433` to `open433` and put it in the `custom_components`.
-Then after restarting the server you can add switches like this:
+Then after restarting the server you need to set the configure homeassistant to use the module:
+```
+open433:
+  port: COM3
+```
+Then you can add switches like this:
 ```
 switch:
   - platform: open433
-    port: COM3
     switches:
       KitchenLamp:
         code_on: 2523794944
@@ -29,4 +33,16 @@ switch:
         protocol: 2
         length: 32
         signal_repetitions: 5
+```
+Or add binary sensors (with a possible timeout) like this:
+```
+binary_sensor:
+  - platform: open433
+    switches:
+      inputA:
+        code_on: 2389577216
+        code_off: 2171473408
+        protocol: 2
+        length: 32
+        on_timeout: 2 #(Optional) Will turn off 2sec after receiving code_on, code_off will still be functional
 ```

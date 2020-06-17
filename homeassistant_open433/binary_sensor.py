@@ -1,9 +1,11 @@
+"""Support for binary sensor using RPi GPIO."""
 import logging
+from threading import Timer
 
 import voluptuous as vol
 
-from homeassistant.components.switch import SwitchEntity, PLATFORM_SCHEMA
-from homeassistant.const import CONF_NAME, CONF_SWITCHES
+from homeassistant.components.binary_sensor import PLATFORM_SCHEMA, BinarySensorEntity
+from homeassistant.const import CONF_NAME, CONF_SWITCHES, DEVICE_DEFAULT_NAME
 import homeassistant.helpers.config_validation as cv
 from . import DOMAIN, REQ_LOCK, rcswitch
 
@@ -14,6 +16,7 @@ CONF_CODE_ON = "code_on"
 CONF_PROTOCOL = "protocol"
 CONF_LENGTH = "length"
 CONF_SIGNAL_REPETITIONS = "signal_repetitions"
+CONF_ON_TIMEOUT = "on_timeout"
 
 SWITCH_SCHEMA = vol.Schema(
 	{
@@ -22,6 +25,8 @@ SWITCH_SCHEMA = vol.Schema(
 		vol.Optional(CONF_LENGTH, default=32): cv.positive_int,
 		vol.Optional(CONF_SIGNAL_REPETITIONS, default=15): cv.positive_int,
 		vol.Optional(CONF_PROTOCOL, default=2): cv.positive_int,
+		vol.Optional(CONF_PROTOCOL, default=2): cv.positive_int,
+		vol.Optional(CONF_ON_TIMEOUT, default=0): cv.positive_int,
 	}
 )
 
@@ -39,22 +44,22 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
 	devices = []
 	for dev_name, properties in switches.items():
 		devices.append(
-			Open433Switch(
+			Open433BinarySensor(
 				properties.get(CONF_NAME, dev_name),
 				rf,
 				properties.get(CONF_PROTOCOL),
 				properties.get(CONF_LENGTH),
-				properties.get(CONF_SIGNAL_REPETITIONS),
 				properties.get(CONF_CODE_ON),
 				properties.get(CONF_CODE_OFF),
+				properties.get(CONF_ON_TIMEOUT),
 			)
 		)
 
-	add_entities(devices)
+	add_entities(devices, True)
 
 
-class Open433Switch(SwitchEntity):
-	def __init__(self, name, rf, protocol, length, signal_repetitions, code_on, code_off):
+class Open433BinarySensor(BinarySensorEntity):
+	def __init__(self, name, rf, protocol, length, code_on, code_off, on_timeout):
 		self._name = name
 		self._state = False
 		self._rf = rf
@@ -62,8 +67,13 @@ class Open433Switch(SwitchEntity):
 		self._length = length
 		self._code_on = code_on
 		self._code_off = code_off
-		self._signal_repetitions = signal_repetitions
+		self._on_timeout = on_timeout
+
 		self._rf.addIncomingPacketListener(self._incoming)
+
+	def _turn_off(self):
+		self._state = False
+		self.schedule_update_ha_state()
 
 	def _incoming(self, packet):
 		if isinstance(packet, rcswitch.packets.ReceivedSignal):
@@ -71,6 +81,9 @@ class Open433Switch(SwitchEntity):
 				if packet.decimal in self._code_on:
 					self._state = True
 					self.schedule_update_ha_state()
+					if self._on_timeout != 0:
+						Timer(self._on_timeout, self._turn_off).start()
+
 				if packet.decimal in self._code_off:
 					self._state = False
 					self.schedule_update_ha_state()
@@ -87,21 +100,5 @@ class Open433Switch(SwitchEntity):
 	def is_on(self):
 		return self._state
 
-	def _send_code(self, code_list, protocol, length):
-		with REQ_LOCK:
-			_LOGGER.info("Sending code(s): %s", code_list)
-			self._rf.setRepeatTransmit(self._signal_repetitions)
-			for code in code_list:
-				packet = rcswitch.packets.SendDecimal(value=code, length=length, protocol=protocol, delay=700)
-				self._rf.send(packet)
-		return True
-
-	def turn_on(self, **kwargs):
-		if self._send_code(self._code_on, self._protocol, self._length):
-			self._state = True
-			self.schedule_update_ha_state()
-
-	def turn_off(self, **kwargs):
-		if self._send_code(self._code_off, self._protocol, self._length):
-			self._state = False
-			self.schedule_update_ha_state()
+	def update(self):
+		pass
