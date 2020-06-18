@@ -93,7 +93,6 @@ class Open433Switch(SwitchEntity):
 
 	def _send_code(self, code_list, protocol, length):
 		with REQ_LOCK:
-			_LOGGER.info("Sending code(s): %s", code_list)
 			self._rf.setRepeatTransmit(self._signal_repetitions)
 			for code in code_list:
 				packet = rcswitch.packets.SendDecimal(value=code, length=length, protocol=protocol, delay=700)

@@ -31,6 +31,7 @@ def setup(hass, config):
 	comspeed = conf.get(CONF_COMSPEED)
 
 	rf = rcswitch.RCSwitch(comport, speed=comspeed)
+	rf.libWaitForAck(True, timeout=1)
 
 	def cleanup(event):
 		rf.cleanup()
