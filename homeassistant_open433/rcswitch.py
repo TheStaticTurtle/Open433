@@ -162,7 +162,7 @@ class RCSwitch(object):
 		self.polling_thread = None
 		self.serial = serial.Serial(self.com_port, self.com_speed, timeout=0.1, xonxoff=False, rtscts=False)
 
-	def serial_sync(self, sync_word, timeout: float = -1, should_print_timeout_error=True):
+	def serial_sync(self, sync_word, timeout: float = 20, should_print_timeout_error=True):
 		tstart = time.time()
 		buf = bytes()
 		while buf[-len(sync_word):] != bytes(sync_word.encode("ascii")):
@@ -188,7 +188,7 @@ class RCSwitch(object):
 		#try:
 			time_start = time.time()
 			while (timeout == -1) or (time_start + timeout > time.time()):
-				self.serial_sync("START", timeout=timeout, should_print_timeout_error=False)
+				self.serial_sync("START", should_print_timeout_error=False)
 				raw = self.serial_sync_end("END", timeout=timeout, should_print_timeout_error=False)
 				packet_type = getPacketType(raw)
 				if packet_type == "receive_signal":
@@ -225,7 +225,7 @@ class RCSwitch(object):
 				if self.closed or (self.timeout != -1 and (time_start + self.timeout < time.time())):
 					raise StopIteration
 
-				data = self.parent.receive_packet(timeout=0.5 if self.timeout == -1 else self.timeout)
+				data = self.parent.receive_packet(timeout=0.75 if self.timeout == -1 else self.timeout)
 				if data is not None:
 					return data
 
