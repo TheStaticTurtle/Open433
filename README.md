@@ -3,6 +3,10 @@
 This project is an opensource usb 433Mhz rf transmitter / receiver based on an atmega328p the board uses a serial communication with a "packet" based systems (simples structs that are sent over the serial port).
 The project has a basic but working implementation of a custom component for homeassistant  which is similar to the rpi_rf configuration)
 
+See my blog articles on the implementation / creation of the project:
+[https://blog.turtleforgaming.fr/open433-lets-turn-light-on-with-the-computer](https://blog.turtleforgaming.fr/open433-lets-turn-light-on-with-the-computer)
+[https://blog.turtleforgaming.fr/creating-a-custom-component-for-homeassistant](https://blog.turtleforgaming.fr/creating-a-custom-component-for-homeassistant)
+
 # Building the project
 
 If you just got your own barebone pcbs you just need to flash the arduino bootloader to do that you can use any iscp programmer (or even "arduino as isp") for the bootloader I use the arduino uno bootloader the hardware is using an atmega328p running at 16MHz at 5V.
