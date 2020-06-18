@@ -4,7 +4,9 @@ This project is an opensource usb 433Mhz rf transmitter / receiver based on an a
 The project has a basic but working implementation of a custom component for homeassistant  which is similar to the rpi_rf configuration)
 
 See my blog articles on the implementation / creation of the project:
+
 [https://blog.turtleforgaming.fr/open433-lets-turn-light-on-with-the-computer](https://blog.turtleforgaming.fr/open433-lets-turn-light-on-with-the-computer)
+
 [https://blog.turtleforgaming.fr/creating-a-custom-component-for-homeassistant](https://blog.turtleforgaming.fr/creating-a-custom-component-for-homeassistant)
 
 # Building the project
