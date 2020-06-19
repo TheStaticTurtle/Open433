@@ -1,8 +1,13 @@
 import logging
+
+import serial
 from homeassistant.const import EVENT_HOMEASSISTANT_START, EVENT_HOMEASSISTANT_STOP
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
 import threading
+
+from homeassistant.exceptions import PlatformNotReady
+
 from . import rcswitch
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,18 +35,26 @@ def setup(hass, config):
 	comport = conf.get(CONF_COMPORT)
 	comspeed = conf.get(CONF_COMSPEED)
 
-	rf = rcswitch.RCSwitch(comport, speed=comspeed)
-	rf.libWaitForAck(True, timeout=1)
+	failure = None
+	try:
+		rf = rcswitch.RCSwitch(comport, speed=comspeed)
+		rf.libWaitForAck(True, timeout=1)
 
-	def cleanup(event):
-		rf.cleanup()
+		def cleanup(event):
+			rf.cleanup()
 
-	def prepare(event):
-		rf.prepare()
-		rf.startReceivingThread()
-		hass.bus.listen_once(EVENT_HOMEASSISTANT_STOP, cleanup)
+		def prepare(event):
+			rf.prepare()
+			rf.startReceivingThread()
 
-	hass.bus.listen_once(EVENT_HOMEASSISTANT_START, prepare)
-	hass.data[DOMAIN] = rf
+			hass.bus.listen_once(EVENT_HOMEASSISTANT_STOP, cleanup)
 
-	return True
+		hass.bus.listen_once(EVENT_HOMEASSISTANT_START, prepare)
+		hass.data[DOMAIN] = rf
+		return True
+
+	except serial.serialutil.SerialException as e:
+		failure = e
+
+	if failure is not None:
+		raise PlatformNotReady(failure)

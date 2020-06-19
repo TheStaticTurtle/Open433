@@ -66,8 +66,15 @@ class Open433Switch(SwitchEntity):
 		self._code_on = code_on
 		self._code_off = code_off
 		self._signal_repetitions = signal_repetitions
+		self._available = True
 		if enable_rx:
 			self._rf.addIncomingPacketListener(self._incoming)
+
+		self._rf.addErrorListener(self._rcSwitchError)
+
+	def _rcSwitchError(self, err):
+		self._available = False
+		self.schedule_update_ha_state()
 
 	def _incoming(self, packet):
 		if isinstance(packet, rcswitch.packets.ReceivedSignal):
@@ -78,6 +85,10 @@ class Open433Switch(SwitchEntity):
 				if packet.decimal in self._code_off:
 					self._state = False
 					self.schedule_update_ha_state()
+
+	@property
+	def available(self):
+		return self._available
 
 	@property
 	def should_poll(self):

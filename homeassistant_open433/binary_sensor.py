@@ -68,8 +68,14 @@ class Open433BinarySensor(BinarySensorEntity):
 		self._code_on = code_on
 		self._code_off = code_off
 		self._on_timeout = on_timeout
-
+		self._available = True
 		self._rf.addIncomingPacketListener(self._incoming)
+
+		self._rf.addErrorListener(self._rcSwitchError)
+
+	def _rcSwitchError(self, err):
+		self._available = False
+		self.schedule_update_ha_state()
 
 	def _turn_off(self):
 		self._state = False
@@ -87,6 +93,10 @@ class Open433BinarySensor(BinarySensorEntity):
 				if packet.decimal in self._code_off:
 					self._state = False
 					self.schedule_update_ha_state()
+
+	@property
+	def available(self):
+		return self._available
 
 	@property
 	def should_poll(self):
