@@ -65,7 +65,7 @@ class packets(object):
 				return self
 			except struct.error:
 				if self.logger is not None:
-					self.logger.error("[ReceivedSignal] Error decode packet: "+base64.b64encode(raw)+" ")
+					self.logger.error("[ReceivedSignal] Error decode packet: " + base64.b64encode(raw) + " ")
 					return self
 
 	class ReceivedAck(object):
@@ -90,7 +90,7 @@ class packets(object):
 				return self
 			except struct.error:
 				if self.logger is not None:
-					self.logger.error("[ReceivedAck] Error decode packet: "+base64.b64encode(raw)+" ")
+					self.logger.error("[ReceivedAck] Error decode packet: " + base64.b64encode(raw) + " ")
 					return self
 
 	class SendDecimal(object):
@@ -159,7 +159,8 @@ class RCSwitch(object):
 		self._timeout = 0.1
 		self._incomingPacketListeners = []
 		self._bufferedPackets = []
-		self.polling_thread = None
+		self._error_listeners = []
+		self._polling_thread = None
 		self.serial = serial.Serial(self.com_port, self.com_speed, timeout=0.1, xonxoff=False, rtscts=False)
 
 	def serial_sync(self, sync_word, timeout: float = 20, should_print_timeout_error=True):
@@ -185,7 +186,7 @@ class RCSwitch(object):
 		return buf[:-len(sync_word)]
 
 	def receive_packet(self, timeout: float = -1):
-		#try:
+		try:
 			time_start = time.time()
 			while (timeout == -1) or (time_start + timeout > time.time()):
 				self.serial_sync("START", should_print_timeout_error=False)
@@ -198,11 +199,11 @@ class RCSwitch(object):
 				if packet_type == "ack":
 					self.logger.info("Received ACK message")
 					return packets.ReceivedAck(self.logger).parse(raw)
-		# except PermissionError as e:
-		# 	raise e
-		# except Exception as e:
-		# 	self.logger.error("[receive_packet] Error receiving packet: "+str(e))
 			return None
+		except Exception as e:
+			for listener in self._error_listeners:
+				listener(e)
+			raise e
 
 	def listen(self, timeout=-1):
 		return self._listen(self, timeout=timeout)
@@ -248,19 +249,23 @@ class RCSwitch(object):
 		return self.send(packets.SendConfig(self.signal_repeat, self.receive_tolerance))
 
 	def send(self, packet):
-		if type(packet) in packets().SendTypes:
-			self.serial.write(b"START\r\n")
-			self.serial.write(packet.pack())
-			self.serial.write(b"END\r\n")
-			self.logger.info("Sending packet: " + str(packet))
-			if self._shouldWaitForAck:
-				return self._waitForAck(timeout=self._timeout)
+		try:
+			if type(packet) in packets().SendTypes:
+				self.serial.write(b"START\r\n")
+				self.serial.write(packet.pack())
+				self.serial.write(b"END\r\n")
+				self.logger.info("Sending packet: " + str(packet))
+				if self._shouldWaitForAck:
+					return self._waitForAck(timeout=self._timeout)
+				else:
+					return True
 			else:
-				return True
-		else:
-			self.logger.error("Passed packet can't be sent " + str(type(packet)))
-			raise ValueError("Passed packet can't be sent " + str(type(packet)))
-
+				self.logger.error("Passed packet can't be sent " + str(type(packet)))
+				raise ValueError("Passed packet can't be sent " + str(type(packet)))
+		except Exception as e:
+			for listener in self._error_listeners:
+				listener(e)
+			raise e
 
 	def _waitForAck(self, timeout=-1.0):
 		tstart = time.time()
@@ -284,9 +289,9 @@ class RCSwitch(object):
 				continue
 
 	def startReceivingThread(self):
-		if self.polling_thread is None:
-			self.polling_thread = Thread(target=self._packetReceiver)
-			self.polling_thread.start()
+		if self._polling_thread is None:
+			self._polling_thread = Thread(target=self._packetReceiver)
+			self._polling_thread.start()
 
 	def _dispatchPacketsToListeners(self):
 		if len(self._incomingPacketListeners) > 0:
@@ -302,10 +307,17 @@ class RCSwitch(object):
 		if who in self._incomingPacketListeners:
 			self._incomingPacketListeners.remove(who)
 
+	def addErrorListener(self, who):
+		self._error_listeners.append(who)
+
+	def removeErrorListener(self, who):
+		if who in self._incomingPacketListeners:
+			self._incomingPacketListeners.remove(who)
+
 	def cleanup(self):
 		self.serial.close()
-		if self.polling_thread is not None:
-			self.polling_thread.join()
+		if self._polling_thread is not None:
+			self._polling_thread.join()
 
 	def prepare(self):
 		pass
