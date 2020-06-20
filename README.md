@@ -54,3 +54,9 @@ binary_sensor:
         length: 32 #(Optional default to 32)
         on_timeout: 2 #(Optional 0 to turn off) Will turn off 2sec after receiving code_on, code_off will still be functional
 ```
+You can also listen to events (open433_rx) to get received codes and send events to open433_tx with the following data to send an rf code:
+```
+code: 2658012672
+protocol: 2
+bitlength: 32
+```

@@ -43,10 +43,22 @@ def setup(hass, config):
 		def cleanup(event):
 			rf.cleanup()
 
+		def packet_listener(packet):
+			if isinstance(packet, rcswitch.packets.ReceivedSignal):
+				hass.bus.fire("open433_rx", {"code": packet.decimal, "protocol": packet.protocol, "bitlength": packet.length, "delay": packet.delay})
+
+		def handle_event(event):
+			code = int(event.data.get("code")) if event.data.get("code") else 2658012672
+			protocol = int(event.data.get("protocol")) if event.data.get("protocol") else 1
+			bitlength = int(event.data.get("bitlength")) if event.data.get("bitlength") else 32
+			packet = rcswitch.packets.SendDecimal(value=code, length=bitlength, protocol=protocol, delay=700)
+			rf.send(packet)
+
 		def prepare(event):
 			rf.prepare()
 			rf.startReceivingThread()
-
+			rf.addIncomingPacketListener(packet_listener)
+			hass.bus.listen("open433_tx", handle_event)
 			hass.bus.listen_once(EVENT_HOMEASSISTANT_STOP, cleanup)
 
 		hass.bus.listen_once(EVENT_HOMEASSISTANT_START, prepare)
