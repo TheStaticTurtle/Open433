@@ -62,6 +62,6 @@ bitlength: 32
 ```
 
 ## Licences
-Software License: GPL v. 3
-Hardware License: CERN OHL v. 1.2
-Documentation License: CC BY-SA 4.0 International
+- Software License: GPL v. 3
+- Hardware License: CERN OHL v. 1.2
+- Documentation License: CC BY-SA 4.0 International
