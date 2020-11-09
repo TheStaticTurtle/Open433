@@ -1,20 +1,21 @@
 #include <RCSwitch.h>
+#include "ArduinoJson.h"
 
 #define BOARD_V01
-#include "packets.h"
+//#include "packets.h"
 #include "board_definition.h"
 
-#define BUFFER_SIZE 512
+//#define BUFFER_SIZE 512
 
 RCSwitch mySwitch = RCSwitch();
-received_signal_packet_t packet_received_signal = {"receive_signal",0,0,0,0,0};
-ack_packet_t ack_packet = {"ack",0,"hello world"};
 
-uint8_t serial_buffer[BUFFER_SIZE];
-uint8_t data_buffer[BUFFER_SIZE];
-int bufferCounter = 0;
-int dataBufferCounter = 0;
-unsigned long last_message = 0;
+//ack_packet_t ack_packet = {"ack",0,"hello world"};
+
+//uint8_t serial_buffer[BUFFER_SIZE];
+//uint8_t data_buffer[BUFFER_SIZE];
+//int bufferCounter = 0;
+//int dataBufferCounter = 0;
+//unsigned long last_message = 0;
 
 void setup() {
   Serial.begin(9600);
@@ -25,37 +26,36 @@ void setup() {
   pinMode(PIN_LED_TX,OUTPUT);
   pinMode(PIN_LED_RX,OUTPUT);
   pinMode(PIN_LED_RX,HIGH);
-  Serial.println("HELLO");
+  sendAck(0);
 }
 
-void sendAck() {
-    ack_packet.t = millis();
-    Serial.println("START"); //Send start marker
-    uint8_t payload[sizeof(ack_packet)]; //Create temporary buffer to store the struct
-    memcpy(payload,&ack_packet,sizeof(ack_packet)); //copy the struct to the tmp buffer
-    for(int i=0;i < sizeof(payload);i++)  Serial.write(payload[i]); //Write the tmp buffer to serial port
-    Serial.println("END"); //Send end marker
+void sendAck(int for_id) {
+    StaticJsonDocument<100> doc;
+    doc["type"]                 = for_id != 0 ? "acknowledgement" : "hello_world";
+    doc["time"]                 = millis();
+    if(for_id!=0) doc["for_id"] = for_id
+    serializeJson(doc, Serial);
+}
+
+void sendReceivedPacket() {
+    StaticJsonDocument<150> doc;
+    doc["type"]            = "recived_signal";
+    doc["time"]            = millis();
+    doc["signal_code"]     = mySwitch.getReceivedValue();;
+    doc["signal_lenght"]   = mySwitch.getReceivedBitlength();
+    doc["signal_delay"]    = mySwitch.getReceivedDelay();
+    doc["signal_protocol"] = mySwitch.getReceivedProtocol();
+    serializeJson(doc, Serial);
 }
 
 void loop() {
   digitalWrite(PIN_LED_RX,HIGH);
   if (mySwitch.available()) {
-    //Assign values to send struct
-    packet_received_signal.t        = millis();
-    packet_received_signal.decimal  = mySwitch.getReceivedValue();
-    packet_received_signal.length   = mySwitch.getReceivedBitlength();
-    packet_received_signal.delay    = mySwitch.getReceivedDelay();
-    packet_received_signal.protocol = mySwitch.getReceivedProtocol();
-    
-    Serial.println("START"); //Send start marker
-    uint8_t payload[sizeof(packet_received_signal)]; //Create temporary buffer to store the struct
-    memcpy(payload,&packet_received_signal,sizeof(packet_received_signal)); //copy the struct to the tmp buffer
-    for(int i=0;i < sizeof(payload);i++)  Serial.write(payload[i]); //Write the tmp buffer to serial port
-    Serial.println("END"); //Send end marker
-    
+    sendReceivedPacket();
     mySwitch.resetAvailable();
   }
-  
+
+  /*
   if(Serial.available()){
     last_message = millis();
     serial_buffer[bufferCounter] = Serial.read();
@@ -101,7 +101,6 @@ void loop() {
     }
     bufferCounter++;
 
-
     //Security measure. Ensure that the buffer will not overflow if the message. It also reset the buffers if the last message eceived was more than 30sec ago
     if((bufferCounter >= BUFFER_SIZE && dataBufferCounter >= BUFFER_SIZE) || last_message+30000 < millis()) {
       memset(data_buffer  , '\0', sizeof(char)*BUFFER_SIZE );
@@ -110,4 +109,5 @@ void loop() {
       bufferCounter = 0;
     }
   }
+  */
 }
