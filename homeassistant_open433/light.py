@@ -16,6 +16,7 @@ CONF_PROTOCOL = "protocol"
 CONF_LENGTH = "length"
 CONF_SIGNAL_REPETITIONS = "signal_repetitions"
 CONF_ENABLE_RECEIVE = "enable_receive"
+CONF_FORCE_LEVELS = "force_levels"
 
 BRIGHTNESS_STATES = vol.Schema(
 	{
@@ -32,6 +33,8 @@ SWITCH_SCHEMA = vol.Schema(
 		vol.Optional(CONF_SIGNAL_REPETITIONS, default=15): cv.positive_int,
 		vol.Optional(CONF_PROTOCOL, default=2): cv.positive_int,
 		vol.Optional(CONF_ENABLE_RECEIVE, default=False): cv.boolean,
+		vol.Optional(CONF_FORCE_LEVELS, default=False): cv.boolean,
+
 	}
 )
 
@@ -81,6 +84,7 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
 				properties.get(CONF_SIGNAL_REPETITIONS),
 				levels,
 				properties.get(CONF_ENABLE_RECEIVE),
+				properties.get(CONF_FORCE_LEVELS),
 			)
 		)
 
@@ -88,7 +92,7 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
 
 
 class Open433Light(LightEntity):
-	def __init__(self, name, rf, protocol, length, signal_repetitions, levels, enable_rx):
+	def __init__(self, name, rf, protocol, length, signal_repetitions, levels, enable_rx, force_levels):
 		self._name = name
 		self._brightness = 0
 		self._rf = rf
@@ -102,6 +106,7 @@ class Open433Light(LightEntity):
 			self._rf.addIncomingPacketListener(self._incoming)
 
 		self._rf.addErrorListener(self._rcSwitchError)
+		self._force_levels = force_levels
 
 		print(levels)
 		logging.warning(levels)
@@ -114,13 +119,13 @@ class Open433Light(LightEntity):
 		print(code)
 		for i, level in enumerate(self._levels):
 			if code in level:
-				return i
+				return i, code
 		return None
 
 	def _incoming(self, packet):
 		if isinstance(packet, rcswitch.packets.ReceivedSignal):
 			if packet.length == self._length and packet.protocol == self._protocol:
-				x = self._searchForCode(packet.decimal)
+				x, _ = self._searchForCode(packet.decimal)
 				if x is not None:
 					self._brightness = x
 					self.schedule_update_ha_state()
@@ -158,6 +163,10 @@ class Open433Light(LightEntity):
 		b = max(min(b, 100), 0)
 
 		codes_to_send = self._levels[b]
+
+		if self._force_levels:
+			b, _ = self._searchForCode(codes_to_send[0]) # Not great but works
+
 		if self._send_code(codes_to_send, self._protocol, self._length):
 			self._brightness = b
 
