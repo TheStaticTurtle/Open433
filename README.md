@@ -70,8 +70,10 @@ light:
         length: 32
         signal_repetitions: 5
         enable_receive: true
+        force_levels: true
 ```
 For this example, the entity KitchenLamp will send the code `2658045484` from brightness 0 to 99 and `2523827756` to 100 
+The `force_levels` option allows the module to clamp homeassistant brightness slider to the specific value set in the config (ie. here sending the value 42 will go back to 0)
 You can add multiple brightness stages with different codes, example:
 ```
 - brightness: 0
