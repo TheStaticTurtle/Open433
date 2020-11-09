@@ -108,15 +108,12 @@ class Open433Light(LightEntity):
 		self._rf.addErrorListener(self._rcSwitchError)
 		self._force_levels = force_levels
 
-		print(levels)
-		logging.warning(levels)
 
 	def _rcSwitchError(self, err):
 		self._available = False
 		self.schedule_update_ha_state()
 
 	def _searchForCode(self, code):
-		print(code)
 		for i, level in enumerate(self._levels):
 			if code in level:
 				return i, code
