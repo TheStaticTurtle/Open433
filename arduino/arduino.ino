@@ -1,4 +1,6 @@
 #include <RCSwitch.h>
+
+#define ARDUINOJSON_USE_LONG_LONG 1
 #include "ArduinoJson.h"
 
 #define BOARD_V01
@@ -31,9 +33,14 @@ void setup() {
 
 void sendAck(int for_id) {
     StaticJsonDocument<100> doc;
-    doc["type"]                 = for_id != 0 ? "acknowledgement" : "hello_world";
+
+    if(for_id!=0)  doc["type"]  = "acknowledgement";
+    if(for_id==0)  doc["type"]  = "hello_world";
+    if(for_id==-1) doc["type"]  = "error";
+
     doc["time"]                 = millis();
-    if(for_id!=0) doc["for_id"] = for_id
+    doc["for_id"]               = for_id;
+
     serializeJson(doc, Serial);
 }
 
@@ -55,6 +62,27 @@ void loop() {
     mySwitch.resetAvailable();
   }
 
+  if(Serial.available()){
+    StaticJsonDocument<320> doc;
+    if( deserializeJson(doc, Serial) == DeserializationError::Ok) {
+        if(strstr(doc["type"] , "send_decimal")) {
+          digitalWrite(PIN_LED_RX,LOW);
+          digitalWrite(PIN_LED_TX,HIGH);
+
+          mySwitch.setProtocol(doc["signal_lenght"].as<int>());
+          mySwitch.send(doc["signal_code"].as<unsigned long>(), doc["signal_lenght"].as<int>());
+
+          digitalWrite(PIN_LED_TX,LOW);
+
+          sendAck(doc["id"]);
+        }
+    } else {
+        sendAck(-1);
+    }
+  }
+
+
+
   /*
   if(Serial.available()){
     last_message = millis();
@@ -68,19 +96,7 @@ void loop() {
         char type[17];  //Create a tmp buffer to store the type of packet received
         memcpy (&type, &data_buffer, 17); //Copy only the first 17bytes to the tmp buffer (See ptype in each struct in packet.h)
 
-        if(strstr(type,"send_decimal")!=NULL) { //SendDecimal packet found
-          send_decimal_packet_t *test = (send_decimal_packet_t*) data_buffer; //Cast the data buffer to the struct representing the packet
 
-          digitalWrite(PIN_LED_RX,LOW); //Led blinking
-          digitalWrite(PIN_LED_TX,HIGH); 
-          mySwitch.setProtocol(test->protocol); //Set the correct protocol according to the received packet
-          mySwitch.send(test->decimal, test->length); //Send the value over the air
-          digitalWrite(PIN_LED_TX,LOW); //Led blinking
-  
-          memset(data_buffer  , '\0', sizeof(char)*BUFFER_SIZE ); //Reset both buffers
-          memset(serial_buffer, '\0', sizeof(char)*BUFFER_SIZE );
-          sendAck();
-        }
         if(strstr(type,"rcswitch_conf")!=NULL) { //SendDecimal packet found
           rcswitch_config_t *test = (rcswitch_config_t*) data_buffer; //Cast the data buffer to the struct representing the packet
 
