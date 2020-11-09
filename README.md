@@ -54,6 +54,35 @@ binary_sensor:
         length: 32 #(Optional default to 32)
         on_timeout: 2 #(Optional 0 to turn off) Will turn off 2sec after receiving code_on, code_off will still be functional
 ```
+
+An implementation of the light component has been done and can be used like this:
+```
+light:
+  - platform: open433
+    switches:
+      BedSideLamp:
+        levels:
+          - brightness: 0
+            code: 2658045484
+          - brightness: 100
+            code: 2523827756
+        protocol: 2
+        length: 32
+        signal_repetitions: 5
+        enable_receive: true
+```
+For this example, the entity KitchenLamp will send the code `2658045484` from brightness 0 to 99 and `2523827756` to 100 
+You can add multiple brightness stages with different codes, example:
+```
+- brightness: 0
+  code: 2658045484
+- brightness: 50
+  code: 2926480940
+- brightness: 100
+  code: 2523827756
+```
+This will send the code `2658045484` from 0 to 49 , the code `2926480940` from 50 to 99 and the code `2523827756` at 100
+
 You can also listen to events (open433_rx) to get received codes and send events to open433_tx with the following data to send an rf code:
 ```
 code: 2658012672
