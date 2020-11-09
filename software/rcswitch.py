@@ -164,26 +164,36 @@ class RCSwitch(object):
 		self.serial = serial.Serial(self.com_port, self.com_speed, timeout=0.1, xonxoff=False, rtscts=False)
 
 	def serial_sync(self, sync_word, timeout: float = 20, should_print_timeout_error=True):
-		tstart = time.time()
-		buf = bytes()
-		while buf[-len(sync_word):] != bytes(sync_word.encode("ascii")):
-			buf += bytes(self.serial.read())
-			if timeout != -1 and (tstart + timeout < time.time()):
-				if should_print_timeout_error:
-					self.logger.error("Timeout while reading start sync")
-				return "timeout"
-		self.serial.read(2)
+		try:
+			tstart = time.time()
+			buf = bytes()
+			while buf[-len(sync_word):] != bytes(sync_word.encode("ascii")):
+				buf += bytes(self.serial.read())
+				if timeout != -1 and (tstart + timeout < time.time()):
+					if should_print_timeout_error:
+						self.logger.error("Timeout while reading start sync")
+					return "timeout"
+			self.serial.read(2)
+		except serial.serialutil.SerialException as e:
+			for listener in self._error_listeners:
+				listener(e)
+			raise e
 
 	def serial_sync_end(self, sync_word, timeout: float = -1, should_print_timeout_error=True):
-		time_start = time.time()
-		buf = bytes()
-		while buf[-len(sync_word):] != bytes(sync_word.encode("ascii")):
-			buf += bytes(self.serial.read())
-			if timeout != -1 and (time_start + timeout < time.time()):
-				if should_print_timeout_error:
-					self.logger.error("Timeout while reading end sync")
-				return "timeout"
-		return buf[:-len(sync_word)]
+		try:
+			time_start = time.time()
+			buf = bytes()
+			while buf[-len(sync_word):] != bytes(sync_word.encode("ascii")):
+				buf += bytes(self.serial.read())
+				if timeout != -1 and (time_start + timeout < time.time()):
+					if should_print_timeout_error:
+						self.logger.error("Timeout while reading end sync")
+					return "timeout"
+			return buf[:-len(sync_word)]
+		except serial.serialutil.SerialException as e:
+			for listener in self._error_listeners:
+				listener(e)
+			raise e
 
 	def receive_packet(self, timeout: float = -1):
 		try:
