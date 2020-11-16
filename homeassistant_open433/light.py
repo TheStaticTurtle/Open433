@@ -11,6 +11,7 @@ _LOGGER = logging.getLogger(__name__)
 
 CONF_BRIGHTNESS = "brightness"
 CONF_LEVELS = "levels"
+CONF_CODE_ON = "code_on"
 CONF_CODE = "code"
 CONF_PROTOCOL = "protocol"
 CONF_LENGTH = "length"
@@ -28,6 +29,8 @@ BRIGHTNESS_STATES = vol.Schema(
 SWITCH_SCHEMA = vol.Schema(
 	{
 		vol.Required(CONF_LEVELS): vol.All(cv.ensure_list, [BRIGHTNESS_STATES]),
+
+		vol.Optional(CONF_CODE_ON): vol.All(cv.ensure_list_csv, [cv.positive_int]),
 
 		vol.Optional(CONF_LENGTH, default=32): cv.positive_int,
 		vol.Optional(CONF_SIGNAL_REPETITIONS, default=15): cv.positive_int,
@@ -48,7 +51,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
 def fill_array(arr):
 	setArrayTpo = None
 	for i in range(0, len(arr)):
-		if arr[i] != setArrayTpo and arr[i] != None:
+		if arr[i] != setArrayTpo and arr[i] is not None:
 			setArrayTpo = arr[i]
 		arr[i] = setArrayTpo
 	return arr
@@ -73,7 +76,7 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
 
 		levels = fill_array(levels)
 		if None in levels:
-			raise KeyError("Falied to create brightness map, may you don't have a brigthness 0 entry")
+			raise KeyError("Failed to create brightness map, may you don't have a brigthness 0 entry")
 
 		devices.append(
 			Open433Light(
@@ -83,6 +86,7 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
 				properties.get(CONF_LENGTH),
 				properties.get(CONF_SIGNAL_REPETITIONS),
 				levels,
+				properties.get(CONF_CODE_ON),
 				properties.get(CONF_ENABLE_RECEIVE),
 				properties.get(CONF_FORCE_LEVELS),
 			)
@@ -92,13 +96,14 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
 
 
 class Open433Light(LightEntity):
-	def __init__(self, name, rf, protocol, length, signal_repetitions, levels, enable_rx, force_levels):
+	def __init__(self, name, rf, protocol, length, signal_repetitions, levels, code_on, enable_rx, force_levels):
 		self._name = name
 		self._brightness = 0
 		self._rf = rf
 		self._protocol = protocol
 		self._length = length
 		self._levels = levels
+		self._code_on = code_on
 
 		self._signal_repetitions = signal_repetitions
 		self._available = True
@@ -107,7 +112,6 @@ class Open433Light(LightEntity):
 
 		self._rf.addErrorListener(self._rcSwitchError)
 		self._force_levels = force_levels
-
 
 	def _rcSwitchError(self, err):
 		self._available = False
@@ -163,6 +167,9 @@ class Open433Light(LightEntity):
 
 		if self._force_levels:
 			b, _ = self._searchForCode(codes_to_send[0]) # Not great but works
+
+		if self._code_on is not None:
+			codes_to_send = self._code_on + codes_to_send
 
 		if self._send_code(codes_to_send, self._protocol, self._length):
 			self._brightness = b
