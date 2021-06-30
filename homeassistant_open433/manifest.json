@@ -1,4 +1,5 @@
 {
+  "version": "1.0.2",
   "domain": "open433",
   "name": "Open433 board",
   "documentation": "https://github.com/TheStaticTurtle/Open433",
