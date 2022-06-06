@@ -3,6 +3,6 @@
   "domain": "open433",
   "name": "Open433 board",
   "documentation": "https://github.com/TheStaticTurtle/Open433",
-  "requirements": ["pyserial==3.4"],
+  "requirements": ["pyserial>=3.4"],
   "codeowners": ["TheStaticTurtle"]
 }
